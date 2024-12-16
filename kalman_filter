@@ -1,0 +1,115 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+h = 0.01  # шаг интегрирования
+g = 9.8  # ускорение свободного падения
+L = 1  # длина маятника
+nu = 0.06  # коэффициент демпфирования
+sigma_w = 0.05  # стандартное отклонение шума процесса
+sigma_v = 0.5  # стандартное отклонение шума измерений
+kalman_init_state = np.array([0.1, 0.1])  # начальное состояние для фильтра Калмана
+simulation_init_state = np.array([-2, 0])  # начальное состояние для симуляции
+
+
+# Функция фильтра Калмана
+def kalman_filter(data, process_noise, measurement_noise, init_state, step_size):
+    filteredData = []
+    state = init_state.reshape(2, 1)  # начальное состояние [угол, угловая скорость]
+
+    H = np.eye(2)  # матрица наблюдения
+    P = np.eye(2)  # матрица ковариации
+
+    Q = np.eye(2) * process_noise  # ковариация шума процесса
+    R = np.eye(2) * measurement_noise  # ковариация шума измерений
+
+    for measurement in data:
+        measurement = measurement.reshape(2, 1)
+        F = np.eye(2) + step_size * (np.array([[1, h], [-h * (g / L) * np.cos(state[0])[0], 1 - h * nu]]))
+
+        # Прогноз нового состояния с помощью метода Эйлера
+        state = np.array([state[0] + state[1] * step_size,
+                          - (g * step_size / L) * np.sin(state[0]) + (1 - step_size * nu) * state[1]])
+
+        # Прогноз ошибки ковариации
+        P = np.dot(F, np.dot(P, F.T)) + Q
+
+        S = np.dot(H, np.dot(P, H.T)) + R  # ошибка наблюдения
+
+        K = np.dot(P, np.dot(H.T, np.linalg.inv(S)))  # матрица коэффициента Калмана
+
+        # Вычисление остатка (ошибки измерения)
+        y = measurement - np.dot(H, state)  # ошибка измерения
+
+        # Обновление состояния
+        state += np.dot(K, y)
+
+        # Обновление ошибки ковариации
+        I = np.eye(2)  # единичная матрица размерности P
+        P = (I - np.dot(K, H)).dot(P)
+
+        filteredData.append(state)
+
+    return np.array(filteredData)
+
+
+# Функция для симуляции движения маятника
+def simulate_pendulum(init_state, t_values):
+    state = init_state.reshape(2, 1)
+    simulatedData = np.empty((len(t_values), 2))
+    simulatedData[0] = init_state
+
+    for i in range(1, len(t_values)):
+        state = np.array([state[0] + state[1] * h,
+                          - (g * h / L) * np.sin(state[0]) + (1 - h * nu) * state[1]])
+        simulatedData[i] = state.flatten()
+
+    return simulatedData
+
+
+# Функция для отрисовки графиков движения маятника
+def plot_pendulum_motion(t_values, data, simulated_data, filtered_data):
+    plt.figure(figsize=(10, 6))
+    plt.plot(t_values, data[:, 0], label='data', color='orange', linewidth=0.7)
+    plt.plot(t_values, simulated_data[:, 0], label='simulation', color='blue')
+    plt.plot(t_values, filtered_data[:, 0], label='filter', color='black', linewidth=0.9)
+
+    plt.title('Движение маятника')
+    plt.xlabel('t')
+    plt.ylabel(r'$\theta$')
+    plt.grid()
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+# Функция для отрисовки фазового портрета
+def plot_phase_portrait(data, simulated_data, filtered_data):
+    plt.figure(figsize=(6, 6))
+    plt.plot(data[:, 0], data[:, 1], label='data', color='orange', linewidth=0.7)
+    plt.plot(simulated_data[:, 0], simulated_data[:, 1], label='simulation', color='blue')
+    plt.plot(filtered_data[:, 0], filtered_data[:, 1], label='filter', color='black', linewidth=0.9)
+
+    plt.title('Фазовый портрет')
+    plt.xlabel(r'$\theta$')
+    plt.ylabel(r'$\omega$')
+    plt.grid()
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+# Основная функция программы
+def main():
+    data = np.loadtxt('data1.txt')  # загрузка данных из файла
+    t_values = np.arange(0, 10, h)  # временные значения от 0 до 10 с шагом h
+
+    simulated_data = simulate_pendulum(simulation_init_state, t_values)  # симуляция движения маятника
+
+    filtered_data = kalman_filter(data, sigma_w, sigma_v, kalman_init_state, h)  # применение фильтра Калмана
+
+    plot_pendulum_motion(t_values, data, simulated_data, filtered_data)  # график движения маятника
+    plot_phase_portrait(data, simulated_data, filtered_data)  # фазовый портрета
+
+
+if __name__ == '__main__':
+    main()
