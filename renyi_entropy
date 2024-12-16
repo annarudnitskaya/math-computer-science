@@ -1,0 +1,66 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+
+def load_data(file_path):
+    data = pd.read_excel(file_path)
+    time_series = data.iloc[:, 0].values  # отсчеты времени
+    filtered_data = data.iloc[:, 2].values  # данные после фильтрации
+    time_series = time_series[::5]  # попросил на защите
+    filtered_data = filtered_data[::5]  # попросил на защите
+    return time_series, filtered_data
+
+
+def correlation_integral(data, epsilon, d):
+    # Вычисление корреляционного интеграла Cd(ε), но это кастомная, не из методы (из методы скину в чат)
+    N = len(data)
+    count = 0
+    for i in range(N - d):
+        # Вычисляем расстояния между последовательностями
+        # Используем векторизацию для получения всех расстояний за один раз
+        distances = np.linalg.norm(data[i:i + d] - data[i + 1:N - d + 1][:, np.newaxis], axis=1)
+        count += np.sum(distances < epsilon)
+    return count / (N * (N - d))
+
+
+def renyi_entropy(data, q=2, epsilon_range=np.linspace(0.01, 1.0, 100), d=2):
+    # Вычисление энтропии
+    C_d = [correlation_integral(data, epsilon, d) for epsilon in epsilon_range]
+    K2_values = [1 / (1 - q) * np.log(C_d[i] / C_d[i + 1]) if C_d[i + 1] > 0 else 0 for i in range(len(C_d) - 1)]
+    # K2_values = [(1 / 0.002) * np.log(C_d[i] / C_d[i + 1]) if C_d[i + 1] > 0 else 0 for i in range(len(C_d) - 1)]
+
+    return K2_values
+
+
+def plot_results(ax, x, y, title, ylabel):
+    ax.plot(x, y, color='slateblue')
+    ax.set_title(f'{title}\nK2 = {y[-1]:.2f}')
+    ax.set_xlabel('ε')
+    ax.set_ylabel(ylabel)
+    ax.grid()
+
+
+def main(file_path):
+    for idx, file_path in enumerate(file_path):
+        time_series, filtered_data = load_data(file_path)
+        r_values = [0.1, 0.5, 0.9]
+
+        fig, axs = plt.subplots(len(r_values), 1, figsize=(10, 15))
+
+        for i, r in enumerate(r_values):
+            epsilon_range = np.linspace(0.01, r, 100)
+            K2_values = renyi_entropy(filtered_data, q=2, epsilon_range=epsilon_range)
+
+            # Построение графика для текущего значения r
+            plot_results(axs[i], np.linspace(0.01, r, len(K2_values)), K2_values,
+                         f'Энтропия Реньи K2 для r={r}, ', 'K2')
+
+        plt.suptitle(f'Энтропия Реньи K2 для различных значений r для сигнала {idx + 1}', fontsize=16)
+        plt.tight_layout(rect=[0, 0.03, 1, 0.99])
+        plt.savefig(f'F[{idx + 1}].png')
+
+
+if __name__ == "__main__":
+    file_path = ['1.xlsx', '2.xlsx', '3.xlsx']
+    main(file_path)
