@@ -1,0 +1,101 @@
+import re
+import math
+from collections import defaultdict
+
+
+def write_binary_file(encoded_data, filename):
+    with open(filename, 'w') as file:
+        file.write(encoded_data)
+
+
+def calculate_entropy(text):
+    frequency = defaultdict(int)
+    for char in text:
+        frequency[char] += 1
+    total_chars = len(text)
+    entropy = -sum((count / total_chars) * math.log2(count / total_chars) for count in frequency.values())
+    return entropy
+
+
+def encode_to_binary(encoded_data):
+    binary_data = bytearray()
+
+    for char, length in encoded_data:
+        # Используем 5 бит для длины (1 бит знака + 4 бита для длины)
+        sign_bit = 0 if length >= 0 else 1
+        length_bits = abs(length)
+
+        # Преобразуем в двоичный формат
+        binary_data.append((sign_bit << 4) | length_bits)
+
+        binary_data.extend(char.encode('utf-8'))  # Кодируем символ в байты UTF-8
+
+    return binary_data
+
+
+def rle_encoding(sequence, max_length):
+    result = ""
+
+    def encode_count(count):
+        sign_bit = "0" if count >= 0 else "1"
+        abs_count = abs(count)
+        count_bits = format(abs_count, '04b')
+        return sign_bit + count_bits
+
+    while sequence:
+        count = 1
+        current = sequence[0]
+
+        # Подсчет длины последовательности
+        for i in range(1, len(sequence)):
+            if sequence[i] == current and count < max_length:
+                count += 1
+            else:
+                break
+
+        # Добавляем длину и символ в результат
+        encoded_count = encode_count(count)
+        result += encoded_count + current
+
+        # Отсекаем обработанную часть
+        sequence = sequence[count:]  # Обновляем sequence
+
+    return result
+
+
+
+def main():
+    input_filename = 'poem.txt'
+    output_filename = 'poem.var[1]'
+    # Открываем файл с кодировкой UTF-8
+    with open(input_filename, 'r', encoding='utf-8') as file:
+        content = file.read()
+
+    # Преобразуем текст в двоичный формат
+    text = ''.join(format(ord(char), '08b') for char in content)
+
+    max_run_length = max(len(match.group(0)) for match in re.finditer(r'0+|1+', text))
+
+    encoded = rle_encoding(sequence=text, max_length=max_run_length)
+
+    # Вычисляем энтропию оригинального текста
+    entropy = calculate_entropy(text)
+
+    original_length_bits = len(text)
+    compressed_length_bits = len(encoded)
+
+    compression_ratio = original_length_bits / compressed_length_bits
+
+    encoded = str(max_run_length) + ' ' + encoded
+    write_binary_file(encoded, output_filename)
+
+    # Выводим результаты
+    print(f'Энтропия: {entropy:.4f}')
+    print(f'Оригинальная длина в битах |S|: {original_length_bits}')
+    print(f'Сжатая длина в битах |C|: {compressed_length_bits}')
+    print(f'Коэффициент сжатия k: {compression_ratio:.4f}')
+    print(f'Максимальная длина последовательности: {max_run_length}')
+
+
+if __name__ == '__main__':
+    main()
